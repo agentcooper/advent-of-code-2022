@@ -1,0 +1,5 @@
+*
+!.gitignore
+!*.swift
+!*.md
+!*.txt
