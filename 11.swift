@@ -10,6 +10,40 @@ guard let input = try? String(contentsOf: URL(fileURLWithPath: "11.txt")) else {
     fatalError("File error")
 }
 
+indirect enum Expression {
+    case constant(Int)
+    case sum(Expression, Expression)
+    case product(Expression, Expression)
+
+    func add(_ value: Int) -> Expression {
+        .sum(self, .constant(value))
+    }
+
+    func multiply(_ value: Int) -> Expression {
+        .product(self, .constant(value))
+    }
+
+    func square() -> Expression {
+        .product(self, self)
+    }
+
+    func calculate() -> Int {
+        switch self {
+            case .constant(let value): return value
+            case .product(let a, let b): return a.calculate() * b.calculate()
+            case .sum(let a, let b): return a.calculate() + b.calculate()
+        }
+    }
+
+    func modulo(_ other: Int) -> Int {
+        switch self {
+            case .constant(let value): return value % other
+            case .sum(let a, let b): return ((a.calculate() % other) + (b.calculate() % other)) % other
+            case .product(let a, let b): return ((a.calculate() % other) * (b.calculate() % other)) % other
+        }
+    }
+}
+
 enum Operation {
     case plus(Int)
     case multiply(Int)
@@ -67,19 +101,47 @@ class Monkey {
 }
 
 var monkeys = input.components(separatedBy: "\n\n").map { Monkey($0) }
+let supermodulo = monkeys.map { $0.divisibleBy }.reduce(1, *)
 
-for _ in 0..<20 {
-    for monkey in monkeys {
-        for item in monkey.items {
-            monkey.inspectedItems += 1
-            let worryLevel = monkey.operation.apply(item) / 3
-            let newMonkeyIndex = monkey.testItem(worryLevel)
-            monkeys[newMonkeyIndex].items.append(worryLevel)
+enum Part {
+    case one
+    case two
+
+    func rounds() -> Int {
+        switch self {
+            case .one: return 20
+            case .two: return 1000
         }
-        monkey.items.removeAll()
+    }
+
+    func manageWorry(value: Int) -> Int {
+        switch self {
+            case .one: return value / 3
+            case .two: return value % supermodulo
+        }
     }
 }
 
-let answer1 = monkeys.map { $0.inspectedItems }.sorted(by: >).prefix(2).reduce(1, *)
+func run(part: Part) -> Int {
+    for _ in 0..<part.rounds() {
+        for monkey in monkeys {
+            for item in monkey.items {
+                monkey.inspectedItems += 1
+                let worryLevel = part.manageWorry(value: monkey.operation.apply(item))
+                let newMonkeyIndex = monkey.testItem(worryLevel)
+                monkeys[newMonkeyIndex].items.append(worryLevel)
+            }
+            monkey.items.removeAll()
+        }
+    }
+
+    return monkeys.map { $0.inspectedItems }.sorted(by: >).prefix(2).reduce(1, *)
+}
+
+let answer1 = run(part: .one)
 print(answer1)
 assert(answer1 == 61503)
+
+let answer2 = run(part: .two)
+print(answer2)
+assert(answer2 == 180391736)
