@@ -4,7 +4,7 @@ guard let input = try? String(contentsOf: URL(fileURLWithPath: "14.txt")) else {
     fatalError("File error")
 }
 
-struct Coordinate {
+struct Coordinate: Hashable {
     let x: Int
     let y: Int
 
@@ -38,37 +38,49 @@ enum Cell {
     case rock
     case sand
     case air
-
-    func toString() -> String {
-        switch self {
-            case .air: return "."
-            case .rock: return "#"
-            case .sand: return "o"
-        }
-    }
 }
 
 class Map {
-    var grid: [[Cell]]
+    let hasFloor: Bool
 
-    var height: Int { grid.count }
-    var width: Int { grid[0].count }
+    var grid: [Coordinate: Cell]
+
+    var height: Int
+    var width: Int
 
     subscript(coordinate: Coordinate) -> Cell {
         get {
-            return self.grid[coordinate.y][coordinate.x]
+            if hasFloor, coordinate.y == height - 1 {
+                return .rock
+            }
+
+            return self.grid[coordinate, default: .air]
         }
         set(cell) {
-            self.grid[coordinate.y][coordinate.x] = cell
+            self.grid[coordinate] = cell
         }
     }
 
     func isValid(_ coordinate: Coordinate) -> Bool {
-        return (0..<width).contains(coordinate.x) && (0..<height).contains(coordinate.y)
+        return (0..<height).contains(coordinate.y)
     }
 
-    init(_ width: Int, _ height: Int) {
-        self.grid = Array(repeating: Array(repeating: .air, count: width), count: height)
+    init(paths: [Path], hasFloor: Bool) {
+        let largestX = paths.map { $0.largestX() }.max()!
+        let largestY = paths.map { $0.largestY() }.max()!
+
+        self.width = largestX + 1
+        self.height = largestY + 1
+        self.grid = [:]
+        self.hasFloor = hasFloor
+
+        for path in paths {
+            drawPath(path: path, cell: .rock)
+        }
+
+        if hasFloor {
+            self.height += 2
+        }
     }
 
     func makeRange(_ a: Int, _ b: Int) -> ClosedRange<Int> {
@@ -78,7 +90,7 @@ class Map {
         if b < a {
             return b...a
         }
-        fatalError("Unexpeced empty range")
+        fatalError("Unexpected empty range")
     }
 
     func drawLine(start: Coordinate, end: Coordinate, cell: Cell) {
@@ -124,40 +136,37 @@ class Map {
         return .still
     }
 
-    func toString() -> String {
-        self.grid.map { $0.map { $0.toString() }.joined(separator: "") }.joined(separator: "\n")
+    func simulate() -> Int {
+        var rest = 0;
+        let initialPosition = Coordinate(x: 500, y: 0)
+        simulation: while true {
+            var movingSand = initialPosition
+            falling: while true {
+                switch fall(coordinate: movingSand) {
+                    case .still: break falling;
+                    case .abyss: break simulation
+                    case .next(let next): movingSand = next
+                }
+            }
+            self[movingSand] = .sand
+            rest += 1
+            if movingSand == initialPosition {
+                break;
+            }
+        }
+        return rest
     }
 }
 
 let lines = input.components(separatedBy: .newlines)
-
 let paths = lines.map { Path.parse($0) }
 
-let largestX = paths.map { $0.largestX() }.max()!
-let largestY = paths.map { $0.largestY() }.max()!
-
-let width = largestX + 1
-let height = largestY + 1
-
-let map = Map(width, height)
-
-for path in paths {
-    map.drawPath(path: path, cell: .rock)
-}
-
-var rest = 0;
-simulation: while true {
-    var movingSand = Coordinate(x: 500, y: 0)
-    falling: while true {
-        switch map.fall(coordinate: movingSand) {
-            case .still: break falling;
-            case .abyss: break simulation
-            case .next(let next): movingSand = next
-        }
-    }
-    map[movingSand] = .sand
-    rest += 1
-}
-let answer1 = rest
+let map1 = Map(paths: paths, hasFloor: false)
+let answer1 = map1.simulate()
 print(answer1)
 assert(answer1 == 901)
+
+let map2 = Map(paths: paths, hasFloor: true)
+let answer2 = map2.simulate()
+print(answer2)
+assert(answer2 == 24589)
